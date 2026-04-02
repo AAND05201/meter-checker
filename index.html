@@ -92,7 +92,7 @@
             </div>
         </div>
 
-        <!-- Clip-on Meter Comparison (The core of your request) -->
+        <!-- Clip-on Meter Comparison -->
         <div class="bg-white rounded-3xl p-6 shadow-sm border-2 border-blue-50">
             <div class="flex items-center gap-2 mb-5">
                 <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 font-bold text-xs italic">C</div>
@@ -203,7 +203,13 @@
                 return;
             }
 
-            const avgKwMeter = logEntries.reduce((acc, curr) => acc + curr.kw, 0) / logEntries.length;
+            // ใช้ค่าเฉลี่ยที่คำนวณจากสูตรใหม่ (Σn/Σt)
+            const avgKwMeter = parseFloat(avgKwDisplay.innerText);
+            if (avgKwMeter <= 0) {
+                resetErrorUI();
+                return;
+            }
+
             const fieldAmps = parseFloat(measuredAmpsInput.value);
             const fieldKwManual = parseFloat(measuredKwInput.value);
             
@@ -234,14 +240,14 @@
             errorPercentDisplay.innerText = "0.00";
             errorIndicator.innerText = "PENDING";
             errorIndicator.className = "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter bg-slate-200 text-slate-500";
-            errorBox.classList.remove('error-glow-green', 'error-glow-red', 'bg-green-50', 'bg-red-50');
+            errorBox.classList.remove('error-glow-green', 'error-glow-red', 'bg-green-50', 'bg-red-50', 'bg-yellow-50');
             errorVerdict.innerText = "WAITING FOR INPUT";
             errorVerdict.className = "text-slate-400";
             measuredKwInput.placeholder = "0.000";
         }
 
         function updateErrorVisuals(absError) {
-            errorBox.classList.remove('bg-slate-50', 'error-glow-green', 'error-glow-red');
+            errorBox.classList.remove('bg-slate-50', 'error-glow-green', 'error-glow-red', 'bg-green-50', 'bg-red-50', 'bg-yellow-50');
             
             if (absError <= 2.5) {
                 errorIndicator.innerText = "EXCELLENT";
@@ -273,8 +279,17 @@
                 return;
             }
             emptyLogMsg.style.display = "none";
-            const avgKw = logEntries.reduce((acc, curr) => acc + curr.kw, 0) / logEntries.length;
-            const avgAmps = logEntries.reduce((acc, curr) => acc + curr.amps, 0) / logEntries.length;
+
+            // คำนวณตามสูตร: kW = (3600 * Σn) / (k * Σt)
+            const totalTime = logEntries.reduce((acc, curr) => acc + curr.interval, 0); // Σt
+            const totalPulses = logEntries.length; // Σn
+            const k = parseFloat(pulseInput.value) || 1200;
+            const v = parseFloat(voltageInput.value) || 220;
+            const pf = parseFloat(pfInput.value) || 0.85;
+
+            const avgKw = (3600 * totalPulses) / (k * totalTime);
+            const avgAmps = (avgKw * 1000) / (v * pf);
+
             avgKwDisplay.innerText = avgKw.toFixed(3);
             avgAmpDisplay.innerText = avgAmps.toFixed(2);
             calculateError();
@@ -307,19 +322,21 @@
                 const interval = (now - lastTapTime) / 1000;
                 if (interval < 0.2) return;
 
-                const kw = 3600 / (interval * (parseFloat(pulseInput.value) || 1600));
+                const kw = 3600 / (interval * (parseFloat(pulseInput.value) || 1200));
                 const amps = (kw * 1000) / ((parseFloat(voltageInput.value) || 220) * (parseFloat(pfInput.value) || 0.85));
 
                 kwDisplay.innerText = kw.toFixed(3);
                 ampDisplay.innerText = amps.toFixed(2);
                 statusText.innerText = "SAMPLING IN PROGRESS";
-                statusText.classList.replace('text-slate-300', 'text-blue-500');
+                statusText.classList.remove('text-slate-300', 'text-orange-500');
+                statusText.classList.add('text-blue-500');
                 intervalIndicator.innerText = `LAST PULSE: ${interval.toFixed(2)} SEC`;
 
                 addLog(interval, kw, amps);
             } else {
                 statusText.innerText = "TIMER STARTED...";
-                statusText.classList.replace('text-slate-300', 'text-orange-500');
+                statusText.classList.remove('text-slate-300');
+                statusText.classList.add('text-orange-500');
                 intervalIndicator.innerText = "TAP ON NEXT PULSE FLASH";
             }
             lastTapTime = now;
